@@ -1350,7 +1350,13 @@ def load_licenses():
             r = requests.get(REMOTE_KEYS_URL, timeout=8, headers={'User-Agent': 'Mozilla/5.0'})
             if r.status_code == 200:
                 remote_data = r.json()
+                local_trials = {
+                    k: v for k, v in merged_data.items()
+                    if k.startswith("KUNALYT0-TRIAL-") and isinstance(v, dict) and v.get("tier") == "TRIAL"
+                }
                 merged_data.update(remote_data)
+                # Per-device trials live only on this device. Gist must not clobber them.
+                merged_data.update(local_trials)
         except:
             pass
             
@@ -1817,16 +1823,27 @@ def generate_session_token():
 def premium_login_screen():
     console.clear()
 
-    # Auto-create trial key
-    if not os.path.exists(AUTH_KEY_FILE) or not load_licenses():
-        trial_key = "KUNALYT0-TRIAL-2026-0001"
-        data = {trial_key: {
-            "username": "Trial User", "hwid": "UNBIND",
-            "created_at": datetime.now().strftime("%Y-%m-%d"),
+    # Per-device trial key. Refresh when missing, expired, or bound to another HWID.
+    # Remote gist used to override local and skip this block entirely (old 2026-11-02 expiry).
+    trial_key = f"KUNALYT0-TRIAL-{get_hwid()[:8]}"
+    _all_lic = load_licenses()
+    _today = datetime.now().strftime("%Y-%m-%d")
+    _trial_entry = _all_lic.get(trial_key)
+    _needs_refresh = (
+        _trial_entry is None
+        or _trial_entry.get("expires_at", "2000-01-01") < _today
+        or _trial_entry.get("hwid", "UNBIND") != get_hwid()
+    )
+    if _needs_refresh:
+        _all_lic[trial_key] = {
+            "username": "Trial User",
+            "hwid": get_hwid(),
+            "created_at": _today,
             "expires_at": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"),
-            "status": "active", "tier": "TRIAL"
-        }}
-        save_licenses(data)
+            "status": "active",
+            "tier": "TRIAL"
+        }
+        save_licenses(_all_lic)
 
     TELEGRAM_LINK = "https://t.me/+6IfBoh4IrToxYmY1"
 
@@ -2109,7 +2126,7 @@ def premium_login_screen():
                 Align.center(Text.from_markup(
                     "[bold #FF00AA]1-DAY FREE TRIAL KEY[/]\n\n"
                     "[bold white]Your Trial Key:[/]\n\n"
-                    "[bold black on #FFAA00]  KUNALYT0-TRIAL-2026-0001  [/]\n\n"
+                    f"[bold black on #FFAA00]  {trial_key}  [/]\n\n"
                     "[#00FFCC]Valid for 1 day[/]\n"
                     "[#00FFCC]Full feature access[/]\n"
                     "[#00FFCC]HWID auto-binding[/]\n\n"
