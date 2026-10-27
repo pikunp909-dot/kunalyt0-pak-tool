@@ -16,7 +16,6 @@ if [ ! -d "$PREFIX" ]; then echo "❌ Termux required"; exit 1; fi
 command -v python3 >/dev/null || pkg install python -y
 
 echo "📦 Installing dependencies (2-3 min)..."
-pip install --quiet --upgrade pip
 for pkg in rich requests pycryptodome zstandard gmalg colorama termcolor pytz; do
     pip install --quiet "$pkg" 2>/dev/null || echo "  ⚠️ $pkg retry needed"
 done
